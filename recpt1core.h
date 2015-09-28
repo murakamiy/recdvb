@@ -76,6 +76,13 @@ typedef struct thread_data {
     splitter *splitter; //invariable
 } thread_data;
 
+typedef struct channel_info {
+    int id;
+    const char *name;
+    unsigned int frequency; // freqno or freq (terrestrial Hz, BSCS110 kHz)
+    unsigned int ts_id;	// slotid or tsid
+} channel_info;
+
 extern const char *version;
 extern char *bsdev[];
 extern char *isdb_t_dev[];
@@ -89,5 +96,7 @@ void calc_cn(void);
 int parse_time(char *rectimestr, int *recsec);
 void do_bell(int bell);
 
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+int lookup_channel(int channel_id, channel_info *output, channel_info *input, int size);
 
 #endif

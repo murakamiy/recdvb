@@ -5,6 +5,7 @@
 #include <sys/poll.h>
 #include <linux/dvb/dmx.h>
 #include <linux/dvb/frontend.h>
+#include "channeldata.h"
 
 #define ISDB_T_NODE_LIMIT 24        // 32:ARIB limit 24:program maximum
 #define ISDB_T_SLOT_LIMIT 8
@@ -123,6 +124,20 @@ do_bell(int bell)
     }
 }
 
+int lookup_channel(int channel_id, channel_info *output, channel_info *input, int size)
+{
+    int i;
+
+    for (i = 0; i < size; i++) {
+        if (channel_id == input[i].id) {
+            memcpy(output, &input[i], sizeof(channel_info));
+            return TRUE;
+        }
+    }
+
+    return FALSE;
+}
+
 /* from checksignal.c */
 int
 tune(char *channel, thread_data *tdata, int dev_num)
@@ -136,6 +151,8 @@ tune(char *channel, thread_data *tdata, int dev_num)
     struct dvb_frontend_event event;
     struct pollfd pfd[1];
     char device[32];
+    int channel_id;
+    channel_info channel_info = { 0 };
 
     /* open tuner */
     if(fefd == 0){
@@ -152,23 +169,45 @@ tune(char *channel, thread_data *tdata, int dev_num)
       fprintf(stderr, "FE_GET_INFO failed\n");
       return 1;
     }
-    if(fe_info.type != FE_OFDM){
-      fprintf(stderr, "type is not FE_OFDM\n");
-      return 1;
+
+    if (fe_info.type == FE_QPSK) {
+        channel_id = atoi(&channel[3]);
+        if (strncmp("BS_", channel, 3) == 0) {
+            if (FALSE == lookup_channel(channel_id, &channel_info, bs_data, ARRAY_SIZE(bs_data))) {
+                fprintf(stderr, "channel:%s is not found\n", channel);
+                return 1;
+            }
+        }
+        else if (strncmp("CS_", channel, 3) == 0) {
+            if (FALSE == lookup_channel(channel_id, &channel_info, cs_data, ARRAY_SIZE(cs_data))) {
+                fprintf(stderr, "channel:%s is not found\n", channel);
+                return 1;
+            }
+        }
+    }
+    else if (fe_info.type == FE_OFDM) {
+        if( (fe_freq = atoi(channel)) == 0){
+          fprintf(stderr, "fe_freq is not number\n");
+          return 1;
+        }
+        channel_info.frequency = (fe_freq * 6000 + 395143) * 1000;
+        channel_info.ts_id = 0;
+    }
+    else {
+        fprintf(stderr, "Unknown type of adapter\n");
+        return 1;
     }
     fprintf(stderr,"Using DVB card \"%s\"\n",fe_info.name);
-    if( (fe_freq = atoi(channel)) == 0){
-      fprintf(stderr, "fe_freq is not number\n");
-      return 1;
-    }
+
+
     prop[0].cmd = DTV_FREQUENCY;
-    prop[0].u.data = (fe_freq * 6000 + 395143) * 1000;
+    prop[0].u.data = channel_info.frequency;
 #ifdef DTV_STREAM_ID
     prop[1].cmd = DTV_STREAM_ID;
 #else
     prop[1].cmd = DTV_ISDBS_TS_ID;
 #endif
-    prop[1].u.data = 0;
+    prop[1].u.data = channel_info.ts_id;
     prop[2].cmd = DTV_TUNE;
     fprintf(stderr,"tuning to %d kHz\n",prop[0].u.data / 1000);
 
