@@ -36,6 +36,9 @@ close_tuner(thread_data *tdata)
     close(tdata->tfd);
     tdata->tfd = -1;
 
+    free(tdata->device_terrestrial.device_no);
+    free(tdata->device_satellite.device_no);
+
     return rv;
 }
 
@@ -138,6 +141,51 @@ int lookup_channel(int channel_id, channel_info *output, channel_info *input, in
     return FALSE;
 }
 
+void set_tuner_device(thread_data *tdata, char *satellite, char *terrestrial)
+{
+    if (satellite == NULL) {
+        tdata->device_satellite.count = 2;
+        tdata->device_satellite.device_no = malloc(sizeof(int) * 2);
+        tdata->device_satellite.device_no[0] = 0;
+        tdata->device_satellite.device_no[1] = 1;
+    }
+    else {
+
+    }
+
+    if (terrestrial == NULL) {
+        tdata->device_terrestrial.count = 2;
+        tdata->device_terrestrial.device_no = malloc(sizeof(int) * 2);
+        tdata->device_terrestrial.device_no[0] = 2;
+        tdata->device_terrestrial.device_no[1] = 3;
+    }
+    else {
+
+    }
+}
+
+int open_frontend_device(int dev_num) {
+    char device[32];
+    int ret = FALSE;
+
+    /* open frontend device */
+    if (fefd == 0) {
+        sprintf(device, "/dev/dvb/adapter%d/frontend0", dev_num);
+        fefd = open(device, O_RDWR);
+
+        if (fefd < 0) {
+            fefd = 0;
+            ret = FALSE;
+        }
+        else {
+            ret = TRUE;
+            fprintf(stderr, "device = %s\n", device);
+        }
+    }
+
+    return ret;
+}
+
 /* from checksignal.c */
 int
 tune(char *channel, thread_data *tdata, int dev_num)
@@ -153,18 +201,47 @@ tune(char *channel, thread_data *tdata, int dev_num)
     char device[32];
     int channel_id;
     channel_info channel_info = { 0 };
+    isdb_type isdb = ISDB_TERRESTRIAL;
+    tuner_device *tuner = NULL;
+    int open_status = FALSE;
 
-    /* open tuner */
-    if(fefd == 0){
-      sprintf(device, "/dev/dvb/adapter%d/frontend0", dev_num);
-      fefd = open(device, O_RDWR);
-      if(fefd < 0) {
-          fprintf(stderr, "cannot open frontend device\n");
-          fefd = 0;
-          return 1;
-      }
-      fprintf(stderr, "device = %s\n", device);
+    if (strncmp("BS_", channel, 3) == 0) {
+        isdb = ISDB_SATELLITE_BS;
     }
+    else if (strncmp("CS_", channel, 3) == 0) {
+        isdb = ISDB_SATELLITE_CS;
+    }
+    else {
+        isdb = ISDB_TERRESTRIAL;
+    }
+
+    if (dev_num == -1) {
+        if (isdb == ISDB_TERRESTRIAL) {
+            tuner = &tdata->device_terrestrial;
+        }
+        else {
+            tuner = &tdata->device_satellite;
+        }
+
+        for (i = 0; i < tuner->count; i++) {
+            open_status = open_frontend_device(tuner->device_no[i]);
+            if (open_status == TRUE) {
+                dev_num = tuner->device_no[i];
+                break;
+            }
+        }
+        if (open_status == FALSE) {
+            fprintf(stderr, "cannot open frontend device\n");
+            return 1;
+        }
+    }
+    else {
+        if (open_frontend_device(dev_num) == FALSE) {
+            fprintf(stderr, "cannot open frontend device\n");
+            return 1;
+        }
+    }
+
     if ( (ioctl(fefd,FE_GET_INFO, &fe_info) < 0)){
       fprintf(stderr, "FE_GET_INFO failed\n");
       return 1;
@@ -172,13 +249,13 @@ tune(char *channel, thread_data *tdata, int dev_num)
 
     if (fe_info.type == FE_QPSK) {
         channel_id = atoi(&channel[3]);
-        if (strncmp("BS_", channel, 3) == 0) {
+        if (isdb == ISDB_SATELLITE_BS) {
             if (FALSE == lookup_channel(channel_id, &channel_info, bs_data, ARRAY_SIZE(bs_data))) {
                 fprintf(stderr, "channel:%s is not found\n", channel);
                 return 1;
             }
         }
-        else if (strncmp("CS_", channel, 3) == 0) {
+        else if (isdb == ISDB_SATELLITE_CS) {
             if (FALSE == lookup_channel(channel_id, &channel_info, cs_data, ARRAY_SIZE(cs_data))) {
                 fprintf(stderr, "channel:%s is not found\n", channel);
                 return 1;

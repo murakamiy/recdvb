@@ -634,13 +634,15 @@ main(int argc, char **argv)
     int port_to = 1234;
     int port_http = 12345;
     sock_data *sockdata = NULL;
-    int dev_num = 0;
+    int dev_num = -1;
     int val;
     char *voltage[] = {"0V", "11V", "15V"};
     char *sid_list = NULL;
 	int connected_socket, listening_socket;
 	unsigned int len;
 	char *channel;
+    char *satellite = NULL;
+    char *terrestrial = NULL;
 
     while((result = getopt_long(argc, argv, "br:smn:ua:H:p:d:hvli:",
                                 long_options, &option_index)) != -1) {
@@ -719,6 +721,8 @@ main(int argc, char **argv)
             break;
         }
     }
+
+    set_tuner_device(&tdata, satellite, terrestrial);
 
 if(use_http){	// http-server add-
 	fprintf(stderr, "run as a daemon..\n");

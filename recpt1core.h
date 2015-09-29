@@ -55,7 +55,16 @@ typedef struct msgbuf {
     char    mtext[MSGSZ];
 } message_buf;
 
+typedef struct tuner_device {
+    int *device_no; // array of device no
+    int count;      // count of array
+} tuner_device;
+
 typedef struct thread_data {
+
+    tuner_device device_satellite;
+    tuner_device device_terrestrial;
+
     int tfd;    /* tuner fd */ //xxx variable
 
     int wfd;    /* output file fd */ //invariable
@@ -75,6 +84,12 @@ typedef struct thread_data {
     decoder_options *dopt; //invariable
     splitter *splitter; //invariable
 } thread_data;
+
+typedef enum isdb_type {
+    ISDB_SATELLITE_BS = 0,
+    ISDB_SATELLITE_CS,
+    ISDB_TERRESTRIAL
+} isdb_type;
 
 typedef struct channel_info {
     int id;
@@ -98,5 +113,7 @@ void do_bell(int bell);
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 int lookup_channel(int channel_id, channel_info *output, channel_info *input, int size);
+void set_tuner_device(thread_data *tdata, char *satellite, char *terrestrial);
+int open_frontend_device(int dev_num);
 
 #endif
